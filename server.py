@@ -19,8 +19,8 @@ class ClientProtocol(asyncio.Protocol):
     def check_login(self, login):
         for client in self.server.clients:
             if client.login == login:
-                return True
-        return False
+                return False
+        return True
 
     def send_history(self):
         for message in self.server.last_messages:
@@ -37,11 +37,11 @@ class ClientProtocol(asyncio.Protocol):
 
                 login = decoded.replace("login:", "").replace("\r\n", "")
                 if self.check_login(login):
+                    self.login = login
                     self.transport.write(f"Привет, {self.login}!".encode())
                     self.send_history()
                 else:
                     self.transport.write(f"Логин {self.login} занят!".encode())
-                    self.connection_lost(Exception())
         else:
             self.send_message(decoded)
 
@@ -59,13 +59,14 @@ class ClientProtocol(asyncio.Protocol):
         print("Соединение установлено")
 
     def connection_lost(self, exc: Optional[Exception]):
-        print("Соединение установлено")
+        print("Соединение разорвано")
         self.server.clients.remove(self)
 
 
 class Server:
     clients: list
     last_messages: []
+
 
     def __init__(self):
         self.clients = []
