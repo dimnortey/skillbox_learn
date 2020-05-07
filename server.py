@@ -23,8 +23,8 @@ class ClientProtocol(asyncio.Protocol):
         return True
 
     def send_history(self):
-        for message in self.server.last_messages:
-            self.transport.write(message)
+        for message in self.server.last_messages[-10:]:
+            self.transport.write(message.encode())
 
     def data_received(self, data: bytes):
         decoded = data.decode()
@@ -42,12 +42,13 @@ class ClientProtocol(asyncio.Protocol):
                     self.send_history()
                 else:
                     self.transport.write(f"Логин {self.login} занят!".encode())
+                    self.server.clients.remove(self)
         else:
             self.send_message(decoded)
 
     def send_message(self, message):
         format_string = f"<{self.login}> {message}"
-        self.server.last_message_update(format_string)
+        self.server.last_messages.append(format_string)
         encoded = format_string.encode()
         for client in self.server.clients:
             if client.login != self.login:
@@ -65,11 +66,12 @@ class ClientProtocol(asyncio.Protocol):
 
 class Server:
     clients: list
-    last_messages: []
+    last_messages: list
 
 
     def __init__(self):
         self.clients = []
+        self.last_messages = []
 
     def create_protocol(self):
         return ClientProtocol(self)
@@ -85,9 +87,7 @@ class Server:
 
         await coroutine.serve_forever()
 
-    def last_message_update(self, message):
-        self.last_messages.remove(0)
-        self.last_messages.append(message)
+
 
 process = Server()
 try:
