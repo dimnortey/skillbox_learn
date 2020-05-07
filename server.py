@@ -1,3 +1,7 @@
+"""
+Серверное приложение для соединений
+"""
+
 import asyncio
 from asyncio import transports
 from typing import Optional
@@ -12,6 +16,16 @@ class ClientProtocol(asyncio.Protocol):
         self.server = server
         self.login = None
 
+    def check_login(self, login):
+        for client in self.server.clients:
+            if client.login == login:
+                return True
+        return False
+
+    def send_history(self):
+        for message in self.server.last_messages:
+            self.transport.write(message)
+
     def data_received(self, data: bytes):
         decoded = data.decode()
 
@@ -20,36 +34,41 @@ class ClientProtocol(asyncio.Protocol):
         if self.login is None:
             # login:
             if decoded.startswith("login:"):
-                self.login = decoded.replace("login:", "").replace("\r\n", "")
-                self.transport.write(
-                    f"Привет, {self.login}!".encode()
-                )
+
+                login = decoded.replace("login:", "").replace("\r\n", "")
+                if self.check_login(login):
+                    self.transport.write(f"Привет, {self.login}!".encode())
+                    self.send_history()
+                else:
+                    self.transport.write(f"Логин {self.login} занят!".encode())
+                    self.connection_lost(Exception())
         else:
             self.send_message(decoded)
-            self.transport.write(decoded)
 
     def send_message(self, message):
         format_string = f"<{self.login}> {message}"
+        self.server.last_message_update(format_string)
         encoded = format_string.encode()
-        for login, client in self.server.clients.items():
-            if login != self.login:
+        for client in self.server.clients:
+            if client.login != self.login:
                 client.transport.write(encoded)
 
     def connection_made(self, transport: transports.Transport):
         self.transport = transport
-        self.server.clients.update({self.login: self})
+        self.server.clients.append(self)
         print("Соединение установлено")
 
     def connection_lost(self, exc: Optional[Exception]):
         print("Соединение установлено")
-        self.server.clients.pop(self.login)
+        self.server.clients.remove(self)
 
 
 class Server:
-    clients: dist
+    clients: list
+    last_messages: []
 
     def __init__(self):
-        self.clients = {}
+        self.clients = []
 
     def create_protocol(self):
         return ClientProtocol(self)
@@ -64,6 +83,10 @@ class Server:
         print("Сервер запущен ...")
 
         await coroutine.serve_forever()
+
+    def last_message_update(self, message):
+        self.last_messages.remove(0)
+        self.last_messages.append(message)
 
 process = Server()
 try:
